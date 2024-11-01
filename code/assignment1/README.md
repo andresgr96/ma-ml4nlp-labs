@@ -1,17 +1,17 @@
 # Assignment 1 - Andres Garcia
 
-## Downloanding and Installing Dependencies
+## Downloading and Installing Dependencies
 
 1. Download .zip file
 2. Unzip contents into your MA-ML4NLP-LABS/code directory
 3. Then follow the steps below in the terminal:
-4. Commands are in linux CDI but should be very similar in other OS's
+4. Commands are in Linux CDI but should be very similar in other OS's
 
 ```
 
-# If you dont have virtualenv istalled run:
+# If you dont have virtualenv installed run:
 
-python3.10 -m pip install virtualenv
+python3 -m pip install virtualenv
 
 # Create and activate an environment:
 
@@ -26,5 +26,5 @@ pip install -r requirements.txt
 ```
 
 ## Running the Code
-I havent turned it into a python file, so you will just need to run the notebook. The structure has not changed, but running the notebook will create a new folder under ./data/tests to store the dummy CONLL files.
+I haven't turned it into a Python file, so you will just need to run the notebook. The structure has not changed, but running the notebook will create a new folder under ./data/tests to store the dummy CONLL files.
 
