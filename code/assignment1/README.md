@@ -26,5 +26,5 @@ pip install -r requirements.txt
 ```
 
 ## Running the Code
-I haven't turned it into a Python file, so you will just need to run the notebook. The structure has not changed, but running the notebook will create a new folder under ./data/tests to store the dummy CONLL files.
+I did not test the python file, so you will just need to run the notebook if its not functioning properly. The structure has not changed, but running the notebook will create a new folder under ./data/tests to store the dummy CONLL files.
 
