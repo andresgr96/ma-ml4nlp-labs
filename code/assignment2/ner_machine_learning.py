@@ -1,5 +1,6 @@
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction import DictVectorizer
+import gensim
 import pandas as pd
 import sys
 
@@ -109,7 +110,7 @@ def main(argv=None):
     outputfile = argv[3]
     
     ## for the word_embedding_model used in the `extract_embeddings_as_features_and_gold' you can either choose to use a statement like this:
-    # language_model = gensim.models.KeyedVectors.load_word2vec_format('../../models/GoogleNews-vectors-negative300.bin.gz', binary=True)
+    language_model = gensim.models.KeyedVectors.load_word2vec_format('../../models/GoogleNews-vectors-negative300.bin.gz', binary=True)
     ## and make sure the path works correctly, or you can add an argument to the commandline that allows users to specify the location of the language model.
     
     training_features, gold_labels = extract_features_and_labels(trainingfile)
