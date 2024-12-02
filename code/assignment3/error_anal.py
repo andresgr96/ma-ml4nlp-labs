@@ -10,52 +10,66 @@ import os
 from utils import *
 import pandas as pd
 
-def analyze_errors(test_features, test_targets, predictions, vec, low_classes, output_dir):
+def analyze_predictions(test_features, test_targets, predictions, vec, low_classes, output_dir):
     """
-    Analyze misclassifications and identify error patterns.
+    Analyze predictions, saving both correct and incorrect classifications,
+    and focusing on specific classes if specified.
 
     Parameters:
     - test_features: List of feature dictionaries for testing.
     - test_targets: List of true NER tags for testing.
     - predictions: Predicted NER tags from the model.
     - vec: DictVectorizer to inverse transform features.
-    - low_classes: Classes to focus on for error analysis (e.g., ['I-LOC', 'I-MISC', 'I-ORG']).
-    - output_dir: Directory to save error analysis results.
+    - low_classes: Classes to focus on for detailed analysis (e.g., ['I-LOC', 'I-MISC', 'I-ORG']).
+    - output_dir: Directory to save analysis results.
 
     Saves:
-    - A CSV file with detailed misclassification information.
+    - A CSV file with detailed classification information for all predictions.
+    - A CSV file focusing on the specified low-performing classes.
     """
-    errors = []
+    results = []
+    focus_errors = []
 
     for i, (features, true_label, predicted_label) in enumerate(zip(test_features, test_targets, predictions)):
-        if true_label in low_classes and true_label != predicted_label:
-            # Separate categorical features and embeddings
-            features_no_embeddings = remove_embedding_from_features([features])[0]
-            
-            # Inverse transform only the categorical features
-            original_features = vec.inverse_transform(vec.transform([features_no_embeddings]))[0]
-            errors.append({
+        # Separate categorical features and embeddings
+        features_no_embeddings = remove_embedding_from_features([features])[0]
+        
+        # Inverse transform only the categorical features
+        original_features = vec.inverse_transform(vec.transform([features_no_embeddings]))[0]
+        
+        is_correct = true_label == predicted_label
+        results.append({
+            "Token": features["token"],
+            "True Label": true_label,
+            "Predicted Label": predicted_label,
+            "Features": original_features,
+            "Correct": is_correct
+        })
+
+        if true_label in low_classes and not is_correct:
+            focus_errors.append({
                 "Token": features["token"],
                 "True Label": true_label,
                 "Predicted Label": predicted_label,
                 "Features": original_features
             })
 
-    # Save errors to a CSV file for detailed analysis
-    error_df = pd.DataFrame(errors)
-    error_file = os.path.join(output_dir, "error_analysis.csv")
-    error_df.to_csv(error_file, index=False)
-    print(f"Error analysis saved to {error_file}")
+    # Save all predictions to a CSV file for detailed analysis
+    results_df = pd.DataFrame(results)
+    results_file = os.path.join(output_dir, "prediction_analysis.csv")
+    results_df.to_csv(results_file, index=False)
+    print(f"Prediction analysis saved to {results_file}")
 
-    # Summarize common error patterns
-    error_summary = error_df.groupby(["True Label", "Predicted Label"]).size().reset_index(name="Count")
-    summary_file = os.path.join(output_dir, "error_summary.csv")
-    error_summary.to_csv(summary_file, index=False)
-    print(f"Error summary saved to {summary_file}")
+    # Save focus class errors to a separate CSV file
+    focus_errors_df = pd.DataFrame(focus_errors)
+    if not focus_errors_df.empty:
+        focus_errors_file = os.path.join(output_dir, "focus_error_analysis.csv")
+        focus_errors_df.to_csv(focus_errors_file, index=False)
+        print(f"Focus class error analysis saved to {focus_errors_file}")
+    else:
+        print("No errors for the specified focus classes.")
 
-    return error_df
-
-
+    return results_df
 
 def create_svm_classifier(train_features, train_targets, max_iter=10000):
     """
@@ -137,15 +151,13 @@ def evaluate_svm(model, vec, test_features, test_targets, output_dir):
         f.write("\nOverall Metrics:\n")
         f.write(f"Precision: {overall_metrics[0]:.3f}, Recall: {overall_metrics[1]:.3f}, F1: {overall_metrics[2]:.3f}\n")
 
-
     # After predictions are made
     low_classes = ['I-LOC', 'I-MISC', 'I-ORG']  # Focus on these classes
-    error_df = analyze_errors(test_features, test_targets, predictions, vec, low_classes, args.results_path)
+    predictions_df = analyze_predictions(test_features, test_targets, predictions, vec, low_classes, output_dir)
 
-    # Display a few misclassified examples
-    print("Sample Misclassifications:")
-    print(error_df.head())
-
+    # Display a few examples
+    print("Sample Predictions:")
+    print(predictions_df.head())
 
     # Plot confusion matrix
     cm = confusion_matrix(test_targets, predictions, labels=model.classes_)
@@ -157,6 +169,7 @@ def evaluate_svm(model, vec, test_features, test_targets, output_dir):
     cm_path = os.path.join(output_dir, "error_confusion_matrix.png")
     plt.savefig(cm_path)
     print(f"Confusion matrix saved to {cm_path}")
+
 
 def main(args):
     os.makedirs(args.results_path, exist_ok=True)
