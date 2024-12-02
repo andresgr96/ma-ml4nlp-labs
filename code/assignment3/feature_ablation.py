@@ -84,7 +84,7 @@ def feature_ablation_analysis(train_data, train_targets, test_data, test_targets
     # Define features to pre-remove for SVM
     features_to_remove = ['token', 'capitalized', 'token_length', 'word_frequency', 'token_length_bin',
                           'prefix_2', 'suffix_2', 'prefix_3', 'suffix_3']
-
+    
     # Adjust training and test data for SVM
     if model_type == "SVM":
         train_data = remove_specified_features(train_data, features_to_remove)
@@ -112,6 +112,8 @@ def feature_ablation_analysis(train_data, train_targets, test_data, test_targets
         train_features_combined = train_categorical_features
         test_features_combined = test_categorical_features
 
+    print(f"Features used: {train_features_no_embeddings[0]} + Embeddings?: {use_embeddings}")  # Sanity check    
+
     # Train and evaluate the baseline model
     print(f"Training Baseline Model")
     if model_type == "logreg":
@@ -133,12 +135,17 @@ def feature_ablation_analysis(train_data, train_targets, test_data, test_targets
     # Perform ablation for each feature
     for feature in feature_list:
         print(f"Ablating feature: {feature}")
+        if feature == "embedding":
+            use_embeddings = False
         ablated_train_features = remove_specified_features(train_data, [feature])
         ablated_test_features = remove_specified_features(test_data, [feature])
 
+        ablated_train_no_embeddings = remove_embedding_from_features(ablated_train_features)
+        ablated_test_no_embeddings = remove_embedding_from_features(ablated_test_features)
+
         # Re-vectorize the ablated features
-        ablated_train_categorical = vec.transform(remove_embedding_from_features(ablated_train_features))
-        ablated_test_categorical = vec.transform(remove_embedding_from_features(ablated_test_features))
+        ablated_train_categorical = vec.transform(ablated_train_no_embeddings)
+        ablated_test_categorical = vec.transform(ablated_test_no_embeddings)
 
         if use_embeddings:
             ablated_train_combined = np.hstack([ablated_train_categorical.toarray(), train_embeddings])
@@ -146,6 +153,9 @@ def feature_ablation_analysis(train_data, train_targets, test_data, test_targets
         else:
             ablated_train_combined = ablated_train_categorical
             ablated_test_combined = ablated_test_categorical
+
+
+        print(f"Features used: {ablated_train_no_embeddings[0]} + Embeddings?: {use_embeddings}")  # Sanity check    
 
         # Train and evaluate with the ablated features
         if model_type == "logreg":
@@ -164,7 +174,7 @@ def feature_ablation_analysis(train_data, train_targets, test_data, test_targets
 
     # Save results
     sorted_results = sorted(results.items(), key=lambda x: -x[1])
-    results_path_file = os.path.join(results_path, "feature_ablation_results.txt")
+    results_path_file = os.path.join(results_path, f"feature_ablation_results_{args.model}.txt")
     with open(results_path_file, "w") as f:
         for feature, score in sorted_results:
             f.write(f"{feature}: {score:.4f}\n")
@@ -190,13 +200,18 @@ def main(args):
         'prefix_2', 'suffix_2', 'prefix_3', 'suffix_3', 'embedding'
     ]
 
+    feature_list_svm = [
+        'pos_tag', 'chunk_tag', 'contains_digit', 'prev_pos_tag', 'next_pos_tag', 'embedding'
+    ]
+
+
     print(f"Performing feature ablation analysis on {args.model}...")
     feature_ablation_analysis(
         train_data=train_data,
         train_targets=train_targets,
         test_data=test_data,
         test_targets=test_targets,
-        feature_list=feature_list,
+        feature_list=feature_list if not (args.model == "SVM") else feature_list_svm,
         model_type=args.model,
         results_path=args.results_path,
         use_embeddings=(args.model == "SVM"),
@@ -245,7 +260,7 @@ if __name__ == '__main__':
         "--model",
         type=str,
         choices=["SVM", "logreg", "NB"],
-        default="SVM",
+        default="NB",
         help="Model type for feature ablation analysis"
     )
     args = parser.parse_args()
