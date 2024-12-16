@@ -166,27 +166,89 @@ def extract_spans_from_file(file_path):
 
     return spans
 
+def extract_spans_from_file(file_path):
+    """
+    Extract spans from a BIO-labeled file, considering sentence boundaries.
+    Each span is represented as (start_index, end_index, label).
+    """
+    spans = []
+    start = None
+    current_label = None
+    current_index = 0  # Token index within the file
+
+    with open(file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line:  # Empty line denotes a sentence boundary
+                if current_label is not None:
+                    spans.append((start, current_index - 1, current_label))  # Close span before boundary
+                start = None
+                current_label = None
+                continue
+
+            token, pos, chunk, label = line.split()
+
+            if label.startswith("B-"):
+                if current_label is not None:
+                    spans.append((start, current_index - 1, current_label))  # Close previous span
+                start = current_index
+                current_label = label[2:]
+            elif label.startswith("I-") and current_label == label[2:]:
+                # Continue current span
+                pass
+            else:
+                if current_label is not None:
+                    spans.append((start, current_index - 1, current_label))  # Close span
+                current_label = None
+                start = None
+
+            current_index += 1
+
+    if current_label is not None:  # Close any remaining open span at the end of the file
+        spans.append((start, current_index - 1, current_label))
+
+    return spans
+
+
+def spans_overlap(span1, span2):
+    """
+    Check if two spans overlap and have the same label.
+    """
+    start1, end1, label1 = span1
+    start2, end2, label2 = span2
+    return label1 == label2 and not (end1 < start2 or end2 < start1)
+
+
 def span_based_evaluation(gt_file, pred_file, check_spans=False):
     """
     Evaluate precision, recall, F1-score, and plot a confusion matrix at the span level.
     Considers sentence boundaries in the span extraction.
     """
-
     gt_spans = extract_spans_from_file(gt_file)
     pred_spans = extract_spans_from_file(pred_file)
 
     label_counts = defaultdict(lambda: {"TP": 0, "FP": 0, "FN": 0})
+    confusion = defaultdict(lambda: defaultdict(int))
 
-    for span in gt_spans:
-        if span in pred_spans:
-            label_counts[span[2]]["TP"] += 1  
-        else:
-            label_counts[span[2]]["FN"] += 1  
+    # Compute true positives, false negatives, and false positives
+    for gt_span in gt_spans:
+        matched = False
+        for pred_span in pred_spans:
+            if spans_overlap(gt_span, pred_span):
+                label_counts[gt_span[2]]["TP"] += 1
+                confusion[gt_span[2]][pred_span[2]] += 1
+                matched = True
+                break
+        if not matched:
+            label_counts[gt_span[2]]["FN"] += 1
+            confusion[gt_span[2]]["O"] += 1  # Predicted as 'O'
 
-    for span in pred_spans:
-        if span not in gt_spans:
-            label_counts[span[2]]["FP"] += 1  
+    for pred_span in pred_spans:
+        if not any(spans_overlap(gt_span, pred_span) for gt_span in gt_spans):
+            label_counts[pred_span[2]]["FP"] += 1
+            confusion["O"][pred_span[2]] += 1  # False positive
 
+    # Calculate precision, recall, F1-score for each label
     all_labels = sorted(set(label for _, _, label in gt_spans + pred_spans))
     precisions, recalls, f1_scores = {}, {}, {}
 
@@ -205,14 +267,10 @@ def span_based_evaluation(gt_file, pred_file, check_spans=False):
 
         print(f"{label} - Precision: {precision:.2f}, Recall: {recall:.2f}, F1-Score: {f1:.2f}")
 
+    # Generate confusion matrix
     matrix = []
     for true_label in all_labels:
-        row = []
-        for pred_label in all_labels:
-            if true_label == pred_label:
-                row.append(label_counts[true_label]["TP"])
-            else:
-                row.append(label_counts[pred_label]["FP"] if pred_label in label_counts else 0)
+        row = [confusion[true_label][pred_label] for pred_label in all_labels]
         matrix.append(row)
 
     plt.figure(figsize=(10, 8))
@@ -222,6 +280,7 @@ def span_based_evaluation(gt_file, pred_file, check_spans=False):
     plt.title("Span-Level Confusion Matrix")
     plt.show()
 
+    # Calculate overall metrics
     overall_tp = sum(counts["TP"] for counts in label_counts.values())
     overall_fp = sum(counts["FP"] for counts in label_counts.values())
     overall_fn = sum(counts["FN"] for counts in label_counts.values())
@@ -235,6 +294,7 @@ def span_based_evaluation(gt_file, pred_file, check_spans=False):
     if check_spans:
         print(f"GT Spans: {list(gt_spans)[:10]}")
         print(f"Pred Spans: {list(pred_spans)[:10]}")
+
 
 
 
